@@ -5,38 +5,21 @@ from langchain.agents import create_agent
 from langchain_core.tools import Tool
 #加载OpenAi的对话模型
 from langchain_openai import ChatOpenAI
-#引入刚定义的三个工具
+#引入工具
 from tool01_gettime import get_time
-from baidu_tool import baidu_web_search
+from baidu_tool import baidu_web_search, build_search_context
 
-#搜索判断
+#基础 LLM 单次问答调用
 def llm_response(prompt: str) -> str:
     """基础LLM单次问答调用"""
     messages = [{"role": "user", "content": prompt}]
     res = llm.invoke(messages)
     return res.content
 
-def judge_need_search(question: str) -> bool:
-    """智能体自主判断是否需要联网搜索"""
-    judge_prompt = """
-你是搜索判断器，只输出True或False，不要任何多余文字。
-需要联网搜索（True）场景：实时新闻、2026最新数据、政策、赛事、今日行情、时效性资讯、当下产品价格。
-不需要搜索（False）场景：基础常识、数学计算、小说创作、代码编写、历史固定知识、逻辑推理。
-用户问题：{q}
-    """.format(q=question)
-    ans = llm_response(judge_prompt).strip()
-    return ans == "True"
-
 def run_agent(user_input: str):
+    """手动智能体：判断是否需要搜索 → 组装上下文 → LLM 回答"""
     print("\n[智能体思考中...]")
-    need_search = judge_need_search(user_input)
-    search_context = ""
-    if need_search:
-        print(f"[触发百度搜索] 关键词：{user_input}")
-        search_data = baidu_web_search(user_input, page_size=4)
-        search_context = "=====百度实时搜索结果=====\n"
-        for i, item in enumerate(search_data, 1):
-            search_context += f"{i}.标题：{item['title']}\n摘要：{item['summary']}\n来源链接：{item['url']}\n\n"
+    search_context = build_search_context(user_input, llm_func=llm_response)
     # 组装回答Prompt
     final_prompt = f"""
 {search_context}
